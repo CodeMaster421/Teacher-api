@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistant Interaction</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+            width: 100%;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            resize: vertical;
+        }
+        button {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 5px;
+            background-color: #28a745;
+            color: #fff;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        .response, .error {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .response {
+            background-color: #e0ffe0;
+            border: 1px solid #b2ffb2;
+        }
+        .error {
+            background-color: #ffe0e0;
+            border: 1px solid #ffb2b2;
+        }
+        .context {
+            margin-top: 10px;
+        }
+        .context p {
+            margin: 0;
+        }
+        .history {
+            margin-top: 20px;
+        }
+        .history p {
+            background-color: #f9f9f9;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Assistant Interaction</h1>
+        <form id="query-form">
+            <input type="hidden" id="thread-id">
+            <label for="query">Enter your query:</label>
+            <textarea id="query" rows="4" cols="50"></textarea>
+            <button type="submit">Send Query</button>
+        </form>
+        <div id="response-container"></div>
+        <div id="history-container" class="history">
+            <h2>Conversation History</h2>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/create', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('thread-id').value = data.thread_id;
+            })
+            .catch(error => console.error('Error:', error));
+        });
+
+        document.getElementById('query-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const threadId = document.getElementById('thread-id').value;
+            const query = document.getElementById('query').value;
+
+            fetch('/ask', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    thread_id: threadId,
+                    query: query
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const responseContainer = document.getElementById('response-container');
+                const historyContainer = document.getElementById('history-container');
+                responseContainer.innerHTML = '';
+                if (data.error) {
+                    responseContainer.innerHTML = `<div class="error">${data.error}</div>`;
+                } else {
+                    responseContainer.innerHTML = `<div class="response">${data.response}</div>`;
+                    // Update history
+                    const userMessage = document.createElement('p');
+                    userMessage.textContent = `You: ${query}`;
+                    historyContainer.appendChild(userMessage);
+                    const assistantMessage = document.createElement('p');
+                    assistantMessage.textContent = `Assistant: ${data.response}`;
+                    historyContainer.appendChild(assistantMessage);
+
+                    // Display context if available
+                    if (data.context) {
+                        data.context.forEach(doc => {
+                            const docDiv = document.createElement('div');
+                            docDiv.classList.add('context');
+                            const fullText = doc.page_content;
+                            const shortenedText = `${fullText.slice(0, 100)}...${fullText.slice(-100)}`;
+                            docDiv.innerHTML = `<strong>${doc.metadata.pdf_name}:</strong><p class="short">${shortenedText}</p><p class="full" style="display:none;">${fullText}</p><button class="expand">Expand</button><button class="shorten" style="display:none;">Shorten</button>`;
+                            responseContainer.appendChild(docDiv);
+
+                            docDiv.querySelector('.expand').addEventListener('click', function() {
+                                docDiv.querySelector('.short').style.display = 'none';
+                                docDiv.querySelector('.full').style.display = 'block';
+                                this.style.display = 'none';
+                                docDiv.querySelector('.shorten').style.display = 'inline-block';
+                            });
+
+                            docDiv.querySelector('.shorten').addEventListener('click', function() {
+                                docDiv.querySelector('.short').style.display = 'block';
+                                docDiv.querySelector('.full').style.display = 'none';
+                                this.style.display = 'none';
+                                docDiv.querySelector('.expand').style.display = 'inline-block';
+                            });
+                        });
+                    }
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    </script>
+</body>
+</html>
