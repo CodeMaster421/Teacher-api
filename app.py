@@ -7,6 +7,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_pinecone import PineconeVectorStore
 from dotenv import load_dotenv  # Add this import
 from flask_cors import CORS
+import json
 
 load_dotenv()  # Add this line
 
@@ -18,6 +19,7 @@ CORS(app)
 api_key = os.environ["OPENAI_API_KEY"]
 assistant_id = os.environ["OPENAI_AI_ASSISTANT"]
 pinecone_api_key = os.environ["PINECONE_API_KEY"]
+API_KEY = "kristal-pdf"
 pinecone_env = "us-east1"
 
 PDF_PATHS = {
@@ -98,27 +100,62 @@ def get_assistant_response(thread_id, user_input=""):
 # Endpoint to create a new thread
 @app.route('/create', methods=['POST', 'GET'])
 def create_thread():
-    thread = client.beta.threads.create()
-    response = jsonify({"thread_id": thread.id})
-    response.headers.add("Access-Control-Allow-Origin", "*")
-    return response
+    try:
+        thread = client.beta.threads.create()
+        response = jsonify({"thread_id": thread.id})
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        return response
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 # Endpoint to handle user input and get response
 @app.route('/ask', methods=['POST', 'GET'])
 def ask():
-    data = request.json
-    thread_id = data.get('thread_id')
-    user_input = data.get('query')
-    response, context = get_assistant_response(thread_id, user_input)
-    if context is not None:
-        context = convert_documents_to_dicts(context)
-        response = jsonify({"response": response, "context": context})
-        response.headers.add("Access-Control-Allow-Origin", "*")
-        return response
-    else:
-        response = jsonify({"error": response["error"]}), 404
-        response.headers.add("Access-Control-Allow-Origin", "*")
-        return response
+    try:
+        data = request.json
+        thread_id = data.get('thread_id')
+        user_input = data.get('query')
+        if not thread_id or not user_input:
+            return jsonify({"error": "Missing thread ID or query parameter"}), 400
+        
+        response, context = get_assistant_response(thread_id, user_input)
+        if context is not None:
+            context = convert_documents_to_dicts(context)
+            response = jsonify({"response": response, "context": context})
+            response.headers.add("Access-Control-Allow-Origin", "*")
+            return response
+        else:
+            return jsonify({"error": response["error"]}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+json_data={}
+
+@app.route('/get_data', methods=['GET'])
+def get_data():
+    response = jsonify(json_data)
+    response.headers.add("Access-Control-Allow-Origin", "*")
+    return response
+
+@app.route('/update_data', methods=['POST'])
+def update_data():
+    # Check if API key is provided in the request headers
+    api_key = request.headers.get("X-API-Key")
+    print(api_key, API_KEY)
+    if api_key != API_KEY:
+        return jsonify({"error": "Invalid API key"}), 401
+    
+    new_data = request.json
+    global json_data
+    json_data = new_data
+    # Save the updated data to a file
+    with open('data.json', 'w') as file:
+        json.dump(new_data, file)
+
+    response=jsonify('JSON file updated successfully')
+    response.headers.add("Access-Control-Allow-Origin", "*")
+    return response
 
 # Endpoint to serve the HTML page
 @app.route('/')
