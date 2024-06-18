@@ -6,11 +6,13 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_pinecone import PineconeVectorStore
 from dotenv import load_dotenv  # Add this import
+from flask_cors import CORS
 
 load_dotenv()  # Add this line
 
 app = Flask(__name__)
 app.config.from_pyfile('config.py')
+CORS(app)
 
 # Set your OpenAI API key and assistant ID here
 api_key = os.environ["OPENAI_API_KEY"]
@@ -94,13 +96,15 @@ def get_assistant_response(thread_id, user_input=""):
         return {"error": f"No thread found with id '{thread_id}'."}, None
 
 # Endpoint to create a new thread
-@app.route('/create', methods=['POST'])
+@app.route('/create', methods=['POST', 'GET'])
 def create_thread():
     thread = client.beta.threads.create()
-    return jsonify({"thread_id": thread.id})
+    response = jsonify({"thread_id": thread.id})
+    response.headers.add("Access-Control-Allow-Origin", "*")
+    return response
 
 # Endpoint to handle user input and get response
-@app.route('/ask', methods=['POST'])
+@app.route('/ask', methods=['POST', 'GET'])
 def ask():
     data = request.json
     thread_id = data.get('thread_id')
@@ -108,9 +112,13 @@ def ask():
     response, context = get_assistant_response(thread_id, user_input)
     if context is not None:
         context = convert_documents_to_dicts(context)
-        return jsonify({"response": response, "context": context})
+        response = jsonify({"response": response, "context": context})
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        return response
     else:
-        return jsonify({"error": response["error"]}), 404
+        response = jsonify({"error": response["error"]}), 404
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        return response
 
 # Endpoint to serve the HTML page
 @app.route('/')
