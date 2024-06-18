@@ -8,6 +8,7 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 app = Flask(__name__)
+app.config.from_pyfile('config.py')
 
 # Set your OpenAI API key and assistant ID here
 api_key = os.environ["OPENAI_API_KEY"]
@@ -32,7 +33,7 @@ PDF_PATHS = {
     "static/pdf/Prudential – Insurance Business (PIN).pdf": "Prudential - Insurance Business (PIN)",
     "static/pdf/Prudential – Investment, Insurance Intermediation and Banking Rules.pdf": "Investment, Insurance Intermediation and Banking Rules",
 }  # Add your PDF paths here
-VECTORSTORE_PATH = "vectorstore"
+VECTORSTORE_PATH = "static/vectorstore"
 
 def convert_documents_to_dicts(data):
     new = []
@@ -107,7 +108,7 @@ def ask():
 # Endpoint to serve the HTML page
 @app.route('/')
 def index():
-    return send_from_directory('', 'teacher.html')
+    return send_from_directory('', 'static/html/teacher.html')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000)
