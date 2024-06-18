@@ -1,11 +1,13 @@
 from flask import Flask, request, jsonify, send_from_directory
 import time
-from openai import OpenAI
 import os
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_pinecone import PineconeVectorStore
+from dotenv import load_dotenv  # Add this import
+
+load_dotenv()  # Add this line
 
 app = Flask(__name__)
 app.config.from_pyfile('config.py')
@@ -13,6 +15,8 @@ app.config.from_pyfile('config.py')
 # Set your OpenAI API key and assistant ID here
 api_key = os.environ["OPENAI_API_KEY"]
 assistant_id = os.environ["OPENAI_AI_ASSISTANT"]
+pinecone_api_key = os.environ["PINECONE_API_KEY"]
+pinecone_env = "us-east1"
 
 PDF_PATHS = {
     "static/pdf/Singapore.pdf": "Singapore",
@@ -33,20 +37,19 @@ PDF_PATHS = {
     "static/pdf/Prudential – Insurance Business (PIN).pdf": "Prudential - Insurance Business (PIN)",
     "static/pdf/Prudential – Investment, Insurance Intermediation and Banking Rules.pdf": "Investment, Insurance Intermediation and Banking Rules",
 }  # Add your PDF paths here
-VECTORSTORE_PATH = "static/vectorstore"
 
+# Initialize Pinecone
+index_name = "hmmm"
 def convert_documents_to_dicts(data):
     new = []
     for doc in data:
         new.append({'page_content': doc.page_content, 'metadata': doc.metadata})
     return new
 
-def load_or_create_vectorstore(pdf_paths, path):
-    if os.path.exists(path):
-        print("Database loaded from memory")
-        return Chroma(persist_directory=path, embedding_function=OpenAIEmbeddings())
-    else:
-        print("Creating database...")
+def load_or_create_vectorstore(pdf_paths, create=False):
+    embeddings=OpenAIEmbeddings(api_key=api_key)
+    print(PineconeVectorStore(index_name=index_name, embedding=embeddings))
+    if create:
         all_splits = []
         for pdf_path, _ in pdf_paths.items():
             loader = PyPDFLoader(pdf_path)
@@ -55,13 +58,17 @@ def load_or_create_vectorstore(pdf_paths, path):
             for split in splits:
                 split.metadata['pdf_name'] = os.path.basename(pdf_path)  # Add PDF name to metadata
             all_splits.extend(splits)
-        return Chroma.from_documents(documents=all_splits, embedding=OpenAIEmbeddings(), persist_directory=path)
+        
+        docsearch = PineconeVectorStore.from_documents(all_splits, embeddings, index_name=index_name)
+        return PineconeVectorStore(index_name=index_name, embedding=embeddings)
+    else:
+        return PineconeVectorStore(index_name=index_name, embedding=embeddings)
 
-vectorstore = load_or_create_vectorstore(PDF_PATHS, VECTORSTORE_PATH)
-retriever = vectorstore.as_retriever()
-
+vectorstore = load_or_create_vectorstore(PDF_PATHS)
+retriever = vectorstore.as_retriever(search_kwargs={"k":2})
 # Set OpenAI client, assistant, and thread
 def load_openai_client_and_assistant():
+    from openai import OpenAI
     client = OpenAI(api_key=api_key)
     my_assistant = client.beta.assistants.retrieve(assistant_id)
     return client, my_assistant
