@@ -12,9 +12,10 @@
             padding: 0;
             display: flex;
             justify-content: center;
-            align-items: center;
-            height: 100vh;
+            align-items: flex-start;
+            min-height: 100vh;
         }
+
         .container {
             background-color: #fff;
             padding: 20px;
@@ -22,7 +23,13 @@
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
             max-width: 600px;
             width: 100%;
+            margin-top: 20px;
         }
+        html, body {
+            overflow: auto;
+        }
+
+
         h1 {
             text-align: center;
             color: #333;
@@ -82,9 +89,9 @@
     <div class="container">
         <h1>Assistant Interaction</h1>
         <form id="query-form">
-            <input type="hidden" id="thread-id">
+            <input type="hidden" id="thread-id" name="thread_id">
             <label for="query">Enter your query:</label>
-            <textarea id="query" rows="4" cols="50"></textarea>
+            <textarea id="query" name="query" rows="4" cols="50"></textarea>
             <button type="submit">Send Query</button>
         </form>
         <div id="response-container"></div>
@@ -121,18 +128,20 @@
             })
             .then(response => response.json())
             .then(data => {
-                console.log(data)
                 const responseContainer = document.getElementById('response-container');
                 const historyContainer = document.getElementById('history-container');
                 responseContainer.innerHTML = '';
+
                 if (data.error) {
                     responseContainer.innerHTML = `<div class="error">${data.error}</div>`;
                 } else {
                     responseContainer.innerHTML = `<div class="response">${data.response}</div>`;
+
                     // Update history
                     const userMessage = document.createElement('p');
                     userMessage.textContent = `You: ${query}`;
                     historyContainer.appendChild(userMessage);
+
                     const assistantMessage = document.createElement('p');
                     assistantMessage.textContent = `Assistant: ${data.response}`;
                     historyContainer.appendChild(assistantMessage);
