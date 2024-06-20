@@ -3,7 +3,6 @@ import time
 import os
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_openai import OpenAIEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_pinecone import PineconeVectorStore
 from dotenv import load_dotenv  # Add this import
 from flask_cors import CORS
@@ -43,32 +42,19 @@ PDF_PATHS = {
 }  # Add your PDF paths here
 
 # Initialize Pinecone
-index_name = "hmmm"
+index_name = "kristal-ai"
 def convert_documents_to_dicts(data):
     new = []
     for doc in data:
         new.append({'page_content': doc.page_content, 'metadata': doc.metadata})
     return new
 
-def load_or_create_vectorstore(pdf_paths, create=False):
+def load_or_create_vectorstore():
     embeddings=OpenAIEmbeddings(api_key=api_key)
     print(PineconeVectorStore(index_name=index_name, embedding=embeddings))
-    if create:
-        all_splits = []
-        for pdf_path, _ in pdf_paths.items():
-            loader = PyPDFLoader(pdf_path)
-            splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-            splits = splitter.split_documents(loader.load())
-            for split in splits:
-                split.metadata['pdf_name'] = os.path.basename(pdf_path)  # Add PDF name to metadata
-            all_splits.extend(splits)
-        
-        docsearch = PineconeVectorStore.from_documents(all_splits, embeddings, index_name=index_name)
-        return PineconeVectorStore(index_name=index_name, embedding=embeddings)
-    else:
-        return PineconeVectorStore(index_name=index_name, embedding=embeddings)
+    return PineconeVectorStore(index_name=index_name, embedding=embeddings)
 
-vectorstore = load_or_create_vectorstore(PDF_PATHS)
+vectorstore = load_or_create_vectorstore()
 retriever = vectorstore.as_retriever(search_kwargs={"k":2})
 # Set OpenAI client, assistant, and thread
 def load_openai_client_and_assistant():
@@ -88,14 +74,19 @@ def wait_on_run(run, thread):
 
 # Initiate assistant AI response
 def get_assistant_response(thread_id, user_input=""):
-    try:
-        message = client.beta.threads.messages.create(thread_id=thread_id, role="user", content=user_input)
-        run = client.beta.threads.runs.create(thread_id=thread_id, assistant_id=assistant_id)
-        run = wait_on_run(run, client.beta.threads.retrieve(thread_id=thread_id))
-        messages = client.beta.threads.messages.list(thread_id=thread_id, order="asc", after=message.id)
-        return messages.data[0].content[0].text.value, retriever.invoke(user_input)
-    except:
-        return {"error": f"No thread found with id '{thread_id}'."}, None
+    message = client.beta.threads.messages.create(thread_id=thread_id, role="user", content=user_input)
+    run = client.beta.threads.runs.create(thread_id=thread_id, assistant_id=assistant_id)
+    run = wait_on_run(run, client.beta.threads.retrieve(thread_id=thread_id))
+    messages = client.beta.threads.messages.list(thread_id=thread_id, order="asc", after=message.id)
+    message_content = messages.data[0].content[0].text
+    annotations = message_content.annotations
+    citations = []
+    # Iterate over the annotations and add footnotes
+    for index, annotation in enumerate(annotations):
+        # Replace the text with a footnote
+        message_content.value = message_content.value.replace(annotation.text, '')
+    # Add footnotes to the end of the message before displaying to user
+    return message_content.value, retriever.invoke(message_content.value)
 
 # Endpoint to create a new thread
 @app.route('/create', methods=['POST', 'GET'])
@@ -142,7 +133,6 @@ def get_data():
 def update_data():
     # Check if API key is provided in the request headers
     api_key = request.headers.get("X-API-Key")
-    print(api_key, API_KEY)
     if api_key != API_KEY:
         return jsonify({"error": "Invalid API key"}), 401
     

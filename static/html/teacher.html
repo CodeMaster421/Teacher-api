@@ -121,6 +121,7 @@
             })
             .then(response => response.json())
             .then(data => {
+                console.log(data)
                 const responseContainer = document.getElementById('response-container');
                 const historyContainer = document.getElementById('history-container');
                 responseContainer.innerHTML = '';
@@ -143,7 +144,7 @@
                             docDiv.classList.add('context');
                             const fullText = doc.page_content;
                             const shortenedText = `${fullText.slice(0, 100)}...${fullText.slice(-100)}`;
-                            docDiv.innerHTML = `<strong>${doc.metadata.pdf_name}:</strong><p class="short">${shortenedText}</p><p class="full" style="display:none;">${fullText}</p><button class="expand">Expand</button><button class="shorten" style="display:none;">Shorten</button>`;
+                            docDiv.innerHTML = `<strong>${doc.metadata.pdf_name} - Page ${doc.metadata.page}:</strong><p class="short">${shortenedText}</p><p class="full" style="display:none;">${fullText}</p><button class="expand">Expand</button><button class="shorten" style="display:none;">Shorten</button>`;
                             responseContainer.appendChild(docDiv);
 
                             docDiv.querySelector('.expand').addEventListener('click', function() {
